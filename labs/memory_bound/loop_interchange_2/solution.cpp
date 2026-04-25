@@ -30,8 +30,7 @@ static void filterVertically(uint8_t *output, const uint8_t *input,
       output[r * width + c] = static_cast<uint8_t>(value);
     }
   }
-     
-      //int *dot = new int[(height - radius) * width]();
+      //loop interchange optimization
       //accumulation
       for (int r = radius; r < height - radius; r++){
         int dot[width] = {0};
@@ -76,7 +75,8 @@ static void filterHorizontally(uint8_t *output, const uint8_t *input,
                                const int *kernel, const int radius,
                                const int shift) {
   const int rounding = 1 << (shift - 1);
-
+                                
+                                
   for (int r = 0; r < height; r++) {
     // Left part of line, partial kernel
     for (int c = 0; c < std::min(radius, width); c++) {
