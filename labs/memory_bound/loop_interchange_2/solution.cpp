@@ -34,7 +34,7 @@ static void filterVertically(uint8_t *output, const uint8_t *input,
       //accumulation
       for (int r = radius; r < height - radius; r++){
         int dot[width] = {0};
-        for (int i = 0; i < radius + 1 + radius; i++){
+        for (int i = 0; i < radius + 1 + radius; i++){  
           for (int c = 0; c < width; c++){
             dot[c] += input[(r - radius + i) * width + c] * kernel[i];
           }

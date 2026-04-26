@@ -31,21 +31,23 @@ result_t compute_alignment(std::vector<sequence_t> const &sequences1,
    * DP 在列方向仍然有依赖，但不同序列之间没有依赖，所以可以并行算，
    * 避免标量版本把同一套递推重复跑 16 次。
    */
-  score_vec_t sequence1_by_pos[sequence_size_v]{};
-  score_vec_t sequence2_by_pos[sequence_size_v]{};
+  alignas(32) score_vec_t sequence1_by_pos[sequence_size_v]{};
+  alignas(32) score_vec_t sequence2_by_pos[sequence_size_v]{};
 
   for (size_t pos = 0; pos < sequence_size_v; ++pos) {
-    std::array<score_t, sequence_count_v> lane_values{};
+    alignas(32) std::array<score_t, sequence_count_v> lane_values{};
 
     for (size_t lane = 0; lane < sequence_count_v; ++lane) {
-      lane_values[lane] = sequences1[lane][pos];
+      lane_values[lane] = static_cast<score_t>(sequences1[lane][pos]);
     }
-    sequence1_by_pos[pos] = _mm256_load_si256((__m256i *)(lane_values.data()));
+    sequence1_by_pos[pos] = _mm256_load_si256(
+        reinterpret_cast<score_vec_t const *>(lane_values.data()));
 
     for (size_t lane = 0; lane < sequence_count_v; ++lane) {
-      lane_values[lane] = sequences2[lane][pos];
+      lane_values[lane] = static_cast<score_t>(sequences2[lane][pos]);
     }
-    sequence2_by_pos[pos] = _mm256_load_si256((__m256i *)(lane_values.data()));
+    sequence2_by_pos[pos] = _mm256_load_si256(
+        reinterpret_cast<score_vec_t const *>(lane_values.data()));
   }
 
   /*
@@ -90,11 +92,10 @@ result_t compute_alignment(std::vector<sequence_t> const &sequences1,
   for (unsigned row = 1; row <= sequence_size_v; ++row) {
     score_vec_t last_diagonal_score =
         score_row[0]; // Cache last diagonal score to compute this cell.
-    score_vec_t first_vertical_gap = vertical_gap_row[0];
-    score_row[0] = first_vertical_gap;
-    last_horizontal_gap = _mm256_add_epi16(first_vertical_gap, gap_open_vec);
+    score_row[0] = vertical_gap_row[0];
+    last_horizontal_gap = _mm256_add_epi16(vertical_gap_row[0], gap_open_vec);
     vertical_gap_row[0] =
-        _mm256_add_epi16(first_vertical_gap, gap_extension_vec);
+        _mm256_add_epi16(vertical_gap_row[0], gap_extension_vec);
 
     score_vec_t sequence1_symbols = sequence1_by_pos[row - 1];
 
@@ -113,15 +114,14 @@ result_t compute_alignment(std::vector<sequence_t> const &sequences1,
       // Compute next score from diagonal direction with match/mismatch.
       score_vec_t best_cell_score =
           _mm256_add_epi16(last_diagonal_score, substitution_score);
-      score_vec_t next_diagonal_score = score_row[col];
-      score_vec_t vertical_gap = vertical_gap_row[col];
 
       // Determine best score from diagonal, vertical, or horizontal direction.
-      best_cell_score = _mm256_max_epi16(best_cell_score, vertical_gap);
+      best_cell_score =
+          _mm256_max_epi16(best_cell_score, vertical_gap_row[col]);
       best_cell_score = _mm256_max_epi16(best_cell_score, last_horizontal_gap);
 
       // Cache next diagonal value and store the current DP cell.
-      last_diagonal_score = next_diagonal_score;
+      last_diagonal_score = score_row[col];
       score_row[col] = best_cell_score;
 
       /*
@@ -131,17 +131,13 @@ result_t compute_alignment(std::vector<sequence_t> const &sequences1,
        * 受限的情况。
        */
       best_cell_score = _mm256_add_epi16(best_cell_score, gap_open_vec);
-      vertical_gap = _mm256_add_epi16(vertical_gap, gap_extension_vec);
+      vertical_gap_row[col] =
+          _mm256_add_epi16(vertical_gap_row[col], gap_extension_vec);
       last_horizontal_gap =
           _mm256_add_epi16(last_horizontal_gap, gap_extension_vec);
 
-      /*
-       * 优化点 4：根据新的 perf 数据，Retiring 已经超过 90%，说明 CPU
-       * 大部分时间都在真正执行指令。这里把同一 DP 格子的 score/vertical gap
-       * 先缓存到寄存器，后续 max/add 复用寄存器值，减少内层循环中的重复
-       * 数组加载和地址计算，目标是降低 retired 指令量。
-       */
-      vertical_gap_row[col] = _mm256_max_epi16(vertical_gap, best_cell_score);
+      vertical_gap_row[col] =
+          _mm256_max_epi16(vertical_gap_row[col], best_cell_score);
       last_horizontal_gap =
           _mm256_max_epi16(last_horizontal_gap, best_cell_score);
     }

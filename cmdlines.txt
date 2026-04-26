@@ -25,3 +25,21 @@ git commit -m "data_pack"
 sudo perf stat -C 0 -M backend_bound_group,frontend_bound_group,bad_speculation_group,retiring_group taskset -c 0 ./lab
 
 sudo perf stat -M backend_bound_group,frontend_bound_group,bad_speculation_group,retiring_group -C 0 taskset -c 0 ./lab ../pexels-pixabay-434334.pbm ../output-golden.pgm
+
+
+cd ~/Desktop/perf-ninja/labs/core_bound/vectorization_1/build
+# 2) 清理旧缓存
+rm -f CMakeCache.txt
+rm -rf CMakeFiles
+# 3) 重新配置为 GCC/clang
+cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ ..
+cmake -DCMAKE_BUILD_TYPE=Debug .. -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+//Clang的Debug
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-g -fno-omit-frame-pointer" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+sudo env "PATH=$PATH" AMDuProfPcm \
+  -m pipeline_util \
+  -C \
+  -c core=0 \
+  -A core \
+  -- taskset -c 0 ./lab
