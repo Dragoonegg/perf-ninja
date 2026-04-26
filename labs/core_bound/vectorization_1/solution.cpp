@@ -24,7 +24,6 @@ result_t compute_alignment(std::vector<sequence_t> const &sequences1,
   using score_vec_t = __m256i;
 
   result_t result{};
-
   /*
    * 优化点 1：先把输入转置成 SIMD 友好的布局。
    * 每个 AVX2 向量有 16 个 int16 lane，刚好对应 16 对独立序列。
@@ -49,17 +48,19 @@ result_t compute_alignment(std::vector<sequence_t> const &sequences1,
   }
 
   /*
+
+  
    * Initialise score values.
    */
-  score_t gap_open{-11};
-  score_t gap_extension{-1};
-  score_t match{6};
-  score_t mismatch{-4};
+  // score_t gap_open{-11};
+  // score_t gap_extension{-1};
+  // score_t match{6};
+  // score_t mismatch{-4};
 
-  score_vec_t gap_open_vec = _mm256_set1_epi16(gap_open);
-  score_vec_t gap_extension_vec = _mm256_set1_epi16(gap_extension);
-  score_vec_t match_vec = _mm256_set1_epi16(match);
-  score_vec_t mismatch_vec = _mm256_set1_epi16(mismatch);
+  score_vec_t gap_open_vec = _mm256_set1_epi16(-11);
+  score_vec_t gap_extension_vec = _mm256_set1_epi16(-1);
+  score_vec_t match_vec = _mm256_set1_epi16(6);
+  score_vec_t mismatch_vec = _mm256_set1_epi16(-4);
 
   /*
    * Setup the matrix.
